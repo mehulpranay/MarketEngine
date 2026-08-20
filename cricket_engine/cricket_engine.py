@@ -485,5 +485,5 @@ init_db()  # Ensures SQLite schema is initialized with lock_time & market_status
 
 while True:
     run_pipeline()
-    print("\nSleeping for 15 minutes...")
-    time.sleep(15 * 60)
+    print("\nSleeping for 120 minutes...")
+    time.sleep(120 * 60)
