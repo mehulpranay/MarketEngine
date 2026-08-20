@@ -32,6 +32,7 @@ def run_full_fangram_pipeline():
         )
         return
 
+
     openai_client = OpenAI(api_key=openai_key)
 
     # Initialize Engine Components
@@ -60,7 +61,7 @@ def run_full_fangram_pipeline():
     print(f"Passed Tier-1 Guardrails: {len(safe_signals)} / {len(raw_signals)}\n")
 
     # Limit batch to first 5 safe signals for the test run
-    test_batch = safe_signals[30:50]
+    test_batch = safe_signals[:10]
     finalized_contracts = []
 
     # -------------------------------------------------------------------
@@ -110,7 +111,7 @@ def run_full_fangram_pipeline():
 
         finalized_contracts.append(contract)
 
-        print("\n  🔥 [SUCCESS - POLYMARKET CONTRACT CREATED] 🔥")
+        print("\n  🔥 [SUCCESS - FANGRAM CONTRACT CREATED] 🔥")
         print(f"     Market ID:        {contract.market_id}")
         print(f"     Market Title:     {contract.market_title}")
         print(f"     Binary Question:  {contract.binary_question}")
@@ -301,8 +302,7 @@ if __name__ == "__main__":
 
 # #     # OPENAI_KEY = "YOUR_OPENAI_API_KEY_HERE"
 # #     # TAVILY_KEY = "YOUR_TAVILY_API_KEY_HERE"
-# #     OPENAI_KEY = "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"
-# #     TAVILY_KEY = "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"
+
 
 # #     openai_client = OpenAI(api_key=OPENAI_KEY)
 
@@ -414,7 +414,7 @@ if __name__ == "__main__":
 # #     print("      FANGRAM AUTOMATED PREDICTION ENGINE (END-TO-END)     ")
 # #     print("==========================================================\n")
 
-# #     OPENAI_KEY = "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"
+# #     
 # #     TAVILY_KEY = "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"
 
 # #     openai_client = OpenAI(api_key=OPENAI_KEY)
@@ -532,7 +532,6 @@ if __name__ == "__main__":
 
 # #     print("\n--- STEP 3: ANCHOR EVENT EXTRACTION ---\n\n")
 
-# #     client = OpenAI(api_key="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")
 # #     extractor = EventExtractorEngine(llm_client=client)  # Runs with OpenAI client
     
 # #     extracted_events = []
