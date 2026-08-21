@@ -101,3 +101,4 @@ if __name__ == "__main__":
     for name in ["Awarapan 2", "Harrd Disk"]:
         result = fetch_advance_booking_estimate(name)
         print(f"{name}: {result}")
+        

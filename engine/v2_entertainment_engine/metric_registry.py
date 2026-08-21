@@ -13,6 +13,7 @@ METRIC_REGISTRY = [
         "question_template": "Will '{movie}' gross over ₹{threshold} Cr India Net on Day 1?",
         "resolution_days_after_release": 1,
         "source_url_template": "https://www.bollywoodhungama.com/movie/{slug}/box-office/",
+        "resolution_field": "Opening Day",
         "resolution_question_text": "What is the Day 1 Box Office Collection of {movie}?",
     },
     {
@@ -20,13 +21,16 @@ METRIC_REGISTRY = [
         "question_template": "Will '{movie}' gross over ₹{threshold} Cr India Net in its Opening Weekend?",
         "resolution_days_after_release": 3,
         "source_url_template": "https://www.bollywoodhungama.com/movie/{slug}/box-office/",
+        "resolution_field": "End of Opening Weekend",
         "resolution_question_text": "What were the opening weekend collections of {movie}?",
     },
     {
         "metric_id": "week1_crore_club",
         "question_template": "Will '{movie}' enter the ₹{threshold} Cr Club within 7 days of release?",
         "resolution_days_after_release": 7,
+        
         "source_url_template": "https://www.bollywoodhungama.com/movie/{slug}/box-office/",
+        "resolution_field": "End of Week 1",
         "resolution_question_text": "What were the opening week collections of {movie}?",
     },
     {
