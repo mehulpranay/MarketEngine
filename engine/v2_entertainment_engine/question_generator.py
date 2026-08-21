@@ -24,9 +24,11 @@ class QuestionSelection(BaseModel):
     """One LLM-calibrated threshold for one registry metric."""
     metric_id: str = Field(description="Must match one of the metric_ids provided in the prompt.")
     threshold: float = Field(description="Sensible ₹ Cr threshold for THIS movie's scale, based on genre/cast/language provided.")
+    initial_yes_probability: float = Field(
+        description="Your honest calibrated probability (0.05-0.95) that the actual result will meet or exceed the threshold. Do NOT default to 0.5 — reason about it genuinely."
+    )
     reasoning: str = Field(description="One sentence: why this threshold fits this movie's expected scale.")
     display_title: str = Field(description="Short, catchy market title for UI display.")
-
 
 class GeneratedQuestionSet(BaseModel):
     movie_name: str
@@ -34,6 +36,7 @@ class GeneratedQuestionSet(BaseModel):
 
 
 ADVANCE_TICKET_RATIO_LOW, ADVANCE_TICKET_RATIO_HIGH = 0.0995, 0.1409
+
 
 
 SYSTEM_PROMPT = """You are calibrating box-office prediction thresholds for an Indian entertainment market platform.
@@ -46,8 +49,11 @@ Use these signals to judge scale:
 - Genre alone is a weaker signal than cast — an action/franchise title with an unknown cast should not automatically get a high threshold.
 
 If an ADVANCE BOOKING ANCHOR is provided in the prompt, treat it as your strongest signal — it's a real, grounded estimate of Day 1 India Net revenue for THIS movie, not a guess. Use it to calibrate the day1_threshold directly (set it near, not far below, the anchor's low end — the point is genuine uncertainty, not a guaranteed pass). Then extrapolate opening_weekend, week1, and lifetime thresholds from that Day 1 anchor using typical Bollywood trajectory patterns (weekend is usually 3-4x Day 1 for a strong opener; lifetime typically continues to build over the following weeks for a film with real legs). If no advance booking anchor is provided, fall back to cast/genre/language judgment alone, as described above.
+For EACH metric, also output an initial_yes_probability — your honest estimate of how likely the actual result is to meet or exceed the threshold you chose. This is NOT automatically 0.50 just because you tried to pick an "uncertain" threshold — a well-chosen threshold can still be, say, 65% likely or 40% likely; the point is calibration, not forced neutrality. If an ADVANCE BOOKING ANCHOR is available, use where your threshold sits relative to the anchor's estimated range to inform this: a threshold near the low end of the range implies a HIGHER probability of hitting it; a threshold near the high end implies a LOWER probability. Without an anchor, reason from cast/genre/language as before, but still commit to a genuine number, not a placeholder.
 
-Do NOT write the question sentence yourself — only provide the threshold, a one-sentence reasoning, and a short display title.
+Do NOT write the question sentence yourself — only provide the threshold, a one-sentence reasoning, probability, and a short display title.
+
+
 """
 
 def generate_questions_for_movie(
@@ -147,6 +153,7 @@ def build_final_questions(
             "question_text": question_text,
             "display_title": selection.display_title,
             "threshold": selection.threshold,
+            "initial_yes_probability": selection.initial_yes_probability,  # new
             "reasoning": selection.reasoning,
             "betting_lock_utc": betting_lock,
             "resolution_deadline_utc": resolution_date.isoformat(),
@@ -158,11 +165,11 @@ def build_final_questions(
 
 
 if __name__ == "__main__":
+
     import os
     logging.basicConfig(level=logging.INFO)
 
-    from metric_registry import METRIC_REGISTRY  # wherever you saved Section 3's registry
-    # print(METRIC_REGISTRY)
+    from metric_registry import METRIC_REGISTRY  
     test_movie = {
         "movie_name": "Awarapan 2", "movie_slug": "awarapan-2",
         "language": "Indian", "release_date": "2026-08-14",

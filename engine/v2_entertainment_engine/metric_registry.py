@@ -30,13 +30,6 @@ METRIC_REGISTRY = [
         "resolution_question_text": "What were the opening week collections of {movie}?",
     },
     {
-        "metric_id": "lifetime_crore_club",
-        "question_template": "Will '{movie}' cross ₹{threshold} Cr India Net lifetime within 30 days of release?",
-        "resolution_days_after_release": 30,
-        "source_url_template": "https://www.bollywoodhungama.com/movie/{slug}/box-office/",
-        "resolution_question_text": "What is {movie} lifetime collection?",
-    },
-    {
         "metric_id": "verdict_hit",
         "question_template": "Will '{movie}' be declared a Hit or better by BollywoodHungama's official verdict?",
         "resolution_days_after_release": 30,
