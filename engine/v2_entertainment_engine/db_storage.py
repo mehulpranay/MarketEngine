@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS markets (
     resolution_outcome TEXT,
     resolution_tier TEXT,
     brier_score REAL,
+    days_overdue INTEGER NOT NULL DEFAULT 0,
+    void_reason TEXT,
     created_at_utc TEXT NOT NULL
 );
 """
@@ -141,6 +143,39 @@ def mark_unresolvable(db_path: str, market_id: str, reason: str) -> None:
         )
         logger.warning(f"Market '{market_id}' could not be resolved: {reason}")
 
+
+def increment_days_overdue(db_path: str, market_id: str) -> int:
+    """Bumps days_overdue by 1 on any non-resolved check, regardless
+    of whether it was PENDING or ERROR. Returns the new count."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE markets SET days_overdue = days_overdue + 1 WHERE market_id = ?",
+            (market_id,),
+        )
+        row = conn.execute(
+            "SELECT days_overdue FROM markets WHERE market_id = ?", (market_id,)
+        ).fetchone()
+        return row[0]
+
+
+def mark_void(db_path: str, market_id: str, reason: str) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE markets SET market_status = 'VOID', void_reason = ? WHERE market_id = ?",
+            (reason, market_id),
+        )
+        logger.warning(f"Market '{market_id}' voided: {reason}")
+
+
+def mark_needs_review(db_path: str, market_id: str, reason: str) -> None:
+    """Persistent ERROR streak — likely means the parser broke, not
+    that data is unavailable. Flag for a human, don't void."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE markets SET market_status = 'NEEDS_REVIEW', void_reason = ? WHERE market_id = ?",
+            (reason, market_id),
+        )
+        logger.error(f"Market '{market_id}' needs review: {reason}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

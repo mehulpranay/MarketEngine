@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger("FanGram.ReleaseCalendar")
 
 RELEASE_DATES_URL = "https://www.bollywoodhungama.com/movie-release-dates/"
-WINDOW_DAYS = 10             # report movies releasing within this many days
+WINDOW_DAYS = 4            # report movies releasing within this many days
 FAR_FUTURE_CUTOFF_DAYS = 60   # stop scanning rows once clearly irrelevant (efficiency only)
 
 

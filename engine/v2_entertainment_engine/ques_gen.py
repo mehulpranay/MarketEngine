@@ -13,7 +13,7 @@ from typing import List, Dict, Optional
 
 from pydantic import BaseModel, Field
 from openai import OpenAI
-from retrieving_advanced_bookings import fetch_advance_booking_estimate
+from retrieving_adv_bking import fetch_advance_booking_estimate
 
 logger = logging.getLogger("FanGram.QuestionGeneration")
 
