@@ -13,6 +13,7 @@ from typing import List, Dict, Optional
 
 from pydantic import BaseModel, Field
 from openai import OpenAI
+from tavily import TavilyClient
 from retrieving_adv_bking import fetch_advance_booking_estimate
 
 logger = logging.getLogger("FanGram.QuestionGeneration")
@@ -55,14 +56,63 @@ Do NOT write the question sentence yourself — only provide the threshold, a on
 
 
 """
+from tally_adv_bookings import get_advance_booking_signal, AdvanceBookingContext
+
+def normalize_advance_signal(advance) -> dict:
+    """Reconciles the two different shapes get_advance_booking_signal can
+    return — a Tier 1 dict (TrackMyShow) or a Tier 2 AdvanceBookingContext
+    (agentic search) — into one consistent format for prompt-building."""
+
+    NOT_AVAILABLE = {"anchor_available": False, "anchor_line": "ADVANCE BOOKING ANCHOR: Not available for this movie.", "source_tier": None}
+
+    if advance is None:
+        return NOT_AVAILABLE
+
+    # Tier 1: plain dict with a raw ticket count — we compute the range via our own ratio
+    if isinstance(advance, dict) and "tickets" in advance:
+        tickets_k = advance["tickets"] / 1000
+        low_est = round(tickets_k * ADVANCE_TICKET_RATIO_LOW, 2)
+        high_est = round(tickets_k * ADVANCE_TICKET_RATIO_HIGH, 2)
+        anchor_line = (
+            f"ADVANCE BOOKING ANCHOR (TrackMyShow): {advance['tickets']:,} tickets sold before release. "
+            f"Estimated Day 1 India Net range: ₹{low_est} Cr - ₹{high_est} Cr."
+        )
+        return {
+            "anchor_available": True,
+            "anchor_line": anchor_line,
+            "estimated_day1_cr": round((low_est + high_est) / 2, 2),
+            "source_tier": "TIER_1_TRACKMYSHOW",
+        }
+
+    # Tier 2: AdvanceBookingContext from agentic search
+    if isinstance(advance, AdvanceBookingContext):
+        if not advance.data_found:
+            return NOT_AVAILABLE
+
+        est = advance.estimated_day1_india_net_cr
+        est_line = (
+            f"Estimated Day 1 India Net: ₹{est} Cr (confidence: {advance.confidence})."
+            if est is not None else
+            f"No specific estimate given (confidence: {advance.confidence})."
+        )
+        anchor_line = f"ADVANCE BOOKING ANCHOR (Web Search): {advance.summary} {est_line}"
+        return {
+            "anchor_available": True,
+            "anchor_line": anchor_line,
+            "estimated_day1_cr": est,
+            "source_tier": "TIER_2_SEARCH",
+        }
+
+    logger.warning(f"Unrecognized advance booking result shape: {type(advance)}")
+    return NOT_AVAILABLE
+
 
 def generate_questions_for_movie(
     movie: Dict,
     metric_registry: List[Dict],
     llm_client: OpenAI,
+    tavily_client: TavilyClient,
 ) -> Optional[GeneratedQuestionSet]:
-    """Calls the LLM once to calibrate thresholds for all confirmed
-    registry metrics for one movie. Returns None on failure."""
 
     confirmed_metrics = [
         {"metric_id": m["metric_id"], "question_template": m["question_template"]}
@@ -70,18 +120,18 @@ def generate_questions_for_movie(
         if m.get("source_url_template")
     ]
 
-    advance = fetch_advance_booking_estimate(movie["movie_name"])
-    if advance:
-        tickets_k = advance["tickets"] / 1000
-        low_est = round(tickets_k * ADVANCE_TICKET_RATIO_LOW, 2)
-        high_est = round(tickets_k * ADVANCE_TICKET_RATIO_HIGH, 2)
-        anchor_line = (
-            f"ADVANCE BOOKING ANCHOR: {advance['tickets']:,} tickets sold before release "
-            f"(source: TrackMyShow). Estimated Day 1 India Net range: ₹{low_est} Cr - ₹{high_est} Cr."
-        )
-        logger.info(f"Advance booking anchor found for '{movie['movie_name']}': {advance['tickets']:,} tickets")
+    raw_advance = get_advance_booking_signal(
+        movie["movie_name"],
+        movie["release_date"],
+        llm_client,
+        tavily_client,
+        known_cast=movie.get("primary_cast"),
+    )
+    advance_info = normalize_advance_signal(raw_advance)
+
+    if advance_info["anchor_available"]:
+        logger.info(f"Advance booking anchor found for '{movie['movie_name']}' via {advance_info['source_tier']}")
     else:
-        anchor_line = "ADVANCE BOOKING ANCHOR: Not available for this movie."
         logger.info(f"No advance booking anchor for '{movie['movie_name']}' — falling back to cast/genre reasoning.")
 
     user_prompt = (
@@ -89,7 +139,7 @@ def generate_questions_for_movie(
         f"Language: {movie['language']}\n"
         f"Genre: {', '.join(movie.get('genre', [])) or 'Unknown'}\n"
         f"Primary Cast: {', '.join(movie.get('primary_cast', [])) or 'Unknown'}\n"
-        f"{anchor_line}\n\n"
+        f"{advance_info['anchor_line']}\n\n"
         f"Generate a threshold for EACH of these metrics:\n{confirmed_metrics}"
     )
 
@@ -177,6 +227,7 @@ if __name__ == "__main__":
     }
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
     generated = generate_questions_for_movie(test_movie, METRIC_REGISTRY, client)
     if generated:
         for q in build_final_questions(test_movie, generated, METRIC_REGISTRY):

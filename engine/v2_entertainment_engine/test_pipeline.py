@@ -1,23 +1,20 @@
 """
-Daily Market Creation
+test_pipeline.py — Daily Market Creation
 
-Run once a day, before the resolution job. Discovers new upcoming
-movies, enriches them, generates calibrated questions, and saves each
-as a new OPEN market.
-
-NOTE: adjust the import lines below to match whatever filenames you
-actually saved each section under.
+Run once a day. Discovers new upcoming movies, enriches them, generates
+calibrated questions (with two-tier advance-booking grounding), and
+saves each as a new OPEN market.
 """
 
 import os
 import uuid
 import logging
-from datetime import datetime, timezone
 
 from openai import OpenAI
+from tavily import TavilyClient
 
-from movie_extractor import get_upcoming_movies          # Section 1
-from context_enrichment import enrich_with_cast_info          # Section 2
+from movie_extractor import get_upcoming_movies              # Section 1
+from context_enrichment import enrich_with_cast_info         # Section 2
 from ques_gen import generate_questions_for_movie, build_final_questions  # Section 3
 from metric_registry import METRIC_REGISTRY
 from db_storage import init_db, save_market
@@ -33,7 +30,7 @@ def _registry_lookup(metric_id: str) -> dict:
     raise KeyError(f"Unknown metric_id '{metric_id}' — not in METRIC_REGISTRY.")
 
 
-def run_daily_market_creation(db_path: str, llm_client: OpenAI) -> None:
+def run_daily_market_creation(db_path: str, llm_client: OpenAI, tavily_client: TavilyClient) -> None:
     init_db(db_path)
 
     new_movies = get_upcoming_movies()
@@ -42,7 +39,7 @@ def run_daily_market_creation(db_path: str, llm_client: OpenAI) -> None:
     for movie in new_movies:
         movie = enrich_with_cast_info(movie)
 
-        generated = generate_questions_for_movie(movie, METRIC_REGISTRY, llm_client)
+        generated = generate_questions_for_movie(movie, METRIC_REGISTRY, llm_client, tavily_client)
         if generated is None:
             logger.error(f"Skipping '{movie['movie_name']}' — question generation failed.")
             continue
@@ -76,6 +73,6 @@ def run_daily_market_creation(db_path: str, llm_client: OpenAI) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    logger.info("Starting daily market creation...")
-    run_daily_market_creation("fangram_markets.db", client)
+    llm_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+    run_daily_market_creation("fangram_markets.db", llm_client, tavily_client)

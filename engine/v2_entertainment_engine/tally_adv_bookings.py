@@ -42,6 +42,8 @@ class AdvanceBookingContext(BaseModel):
     confidence: str = Field(description="'low', 'medium', or 'high' — based on how directly the sources answer this, and how recent/complete the data is.")
     sources_used: List[str] = Field(default_factory=list, description="URLs actually used.")
 
+
+
 ADVANCE_BOOKING_SYSTEM_PROMPT = """You are an agent researching advance booking activity for an upcoming Indian film release, for a prediction market platform.
 
 YOUR OBJECTIVE:
@@ -63,7 +65,7 @@ def _execute_search_tool(tavily_client: TavilyClient, query: str, max_results: i
     """Executes a Tavily search, same logic as GroundingEngine's version."""
     logger.info(f"Executing search: '{query}'")
     try:
-        response = tavily_client.search(query=query, max_results=max_results, search_depth="basic")
+        response = tavily_client.search(query=query, max_results=max_results, search_depth="basic", topic="news", days=2)
         results = response.get("results", [])
         if not results:
             return "No search results found."
@@ -75,16 +77,26 @@ def _execute_search_tool(tavily_client: TavilyClient, query: str, max_results: i
 
 def fetch_advance_booking_via_search(
     movie_name: str,
+    release_date: str,
     llm_client: OpenAI,
     tavily_client: TavilyClient,
+    known_cast: Optional[List[str]] = None,
 ) -> Optional[AdvanceBookingContext]:
     """Agentic search for advance booking data — the resilient fallback
-    when the TrackMyShow parser (fetch_advance_booking_estimate) finds
-    no confident match. Mirrors GroundingEngine's tool-calling loop."""
+    when the TrackMyShow parser finds no confident match."""
+
+    cast_line = f"Known cast: {', '.join(known_cast)}" if known_cast else "Known cast: Unknown"
+
+    user_prompt = (
+        f"Movie: {movie_name}\n"
+        f"Release Date: {release_date}\n"
+        f"{cast_line}\n\n"
+        f"Find current advance booking data using web_search."
+    )
 
     messages = [
         {"role": "system", "content": ADVANCE_BOOKING_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Movie: {movie_name}\n\nFind current advance booking data using web_search."},
+        {"role": "user", "content": user_prompt},
     ]
 
     max_turns = 3
@@ -95,6 +107,7 @@ def fetch_advance_booking_via_search(
                 messages=messages,
                 tools=[SEARCH_TOOL_SPEC],  # reuse from grounding.py
                 tool_choice="auto",
+                reasoning_effort="none",
             )
         except Exception as e:
             logger.error(f"Advance booking search call failed for '{movie_name}': {e}")
@@ -127,18 +140,13 @@ def fetch_advance_booking_via_search(
         return None
 
 
-def get_advance_booking_signal(movie_name, llm_client, tavily_client):
-
-    """Tier 1: cheap, free TrackMyShow parser. Tier 2: agentic search
-    when Tier 1 finds no confident match."""
-
-    result = fetch_advance_booking_estimate(movie_name)  # existing TrackMyShow function
+def get_advance_booking_signal(movie_name, release_date, llm_client, tavily_client, known_cast=None):
+    result = fetch_advance_booking_estimate(movie_name)
     if result:
         return result
 
     logger.info(f"TrackMyShow miss for '{movie_name}' — escalating to search.")
-    return fetch_advance_booking_via_search(movie_name, llm_client, tavily_client)
-
+    return fetch_advance_booking_via_search(movie_name, release_date, llm_client, tavily_client, known_cast)
 
 if __name__ == "__main__":
     import os
@@ -147,6 +155,6 @@ if __name__ == "__main__":
     llm_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
-    result = fetch_advance_booking_via_search("Toxic", llm_client, tavily_client)
+    result = fetch_advance_booking_via_search("Toxic", "2026-08-25", llm_client, tavily_client)
     print(result)
 
