@@ -26,6 +26,19 @@ already been reported (on disk) so re-runs don't repeat themselves.
   
   """
 
+"""OUTPUT EXAMPLE (for one movie):
+[
+  {
+    "movie_name": "Stree 3",
+    "language": "Indian",
+    "digital_only": false,
+    "movie_slug": "stree-3",
+    "release_date": "2026-08-27"
+  }
+]
+
+"""
+
 import os
 import re
 import json
@@ -40,7 +53,7 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger("FanGram.ReleaseCalendar")
 
 RELEASE_DATES_URL = "https://www.bollywoodhungama.com/movie-release-dates/"
-WINDOW_DAYS = 4            # report movies releasing within this many days
+WINDOW_DAYS = 3            # report movies releasing within this many days
 FAR_FUTURE_CUTOFF_DAYS = 60   # stop scanning rows once clearly irrelevant (efficiency only)
 
 
@@ -133,6 +146,7 @@ def parse_release_rows(html: str) -> List[Dict]:
 
         rows.append({"raw_date": raw_date, "raw_name": raw_name, "movie_slug": movie_slug})
 
+    logger.info(f"Found {len(rows)} raw rows (upcoming movies) in {RELEASE_DATES_URL}.")
     return rows
 
 

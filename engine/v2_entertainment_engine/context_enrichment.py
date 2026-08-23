@@ -5,6 +5,41 @@ For each movie from Section 1, fetches its BH cast page and adds
 genre, lead cast, and a confirmed language field.
 """
 
+"""
+[Incoming Movie Dicts from Section 1] (Has movie_slug, name, release_date)
+       │
+       ▼ (For each movie)
+  [Extract Slug] ──► Format URL: https://www.bollywoodhungama.com/movie/{slug}/cast/
+       │
+       ▼ (HTTP GET via requests)
+   [Raw Cast HTML]
+       │
+       ▼ (BeautifulSoup parsing)
+  [Find Headings: "Genre" & "Primary Starcast"]
+       │
+       ▼ (Extract list items into clean lists)
+  [Enriched Movie Dict] (Adds 'genre' and 'primary_cast' keys)
+       │
+       ▼
+ [List of Fully Enriched Movies Ready for Next Step]
+
+"""
+
+""" OUTPUT EXAMPLE (for one movie):
+[
+  {
+    "movie_name": "Stree 3",
+    "language": "Indian",
+    "digital_only": false,
+    "movie_slug": "stree-3",
+    "release_date": "2026-08-27",
+    "genre": ["Comedy", "Horror"],
+    "primary_cast": ["Rajkummar Rao", "Shraddha Kapoor", "Pankaj Tripathi"]
+  }
+]
+
+"""
+
 import logging
 from typing import Dict, List, Optional
 
@@ -85,3 +120,4 @@ if __name__ == "__main__":
     test_movie = {"movie_name": "Pushpa", "movie_slug": "pushpa", "language": "Indian"}
     result = enrich_with_cast_info(test_movie)
     print(result)
+

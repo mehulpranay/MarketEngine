@@ -234,6 +234,7 @@ if __name__ == "__main__":
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+    
     generated = generate_questions_for_movie(test_movie, METRIC_REGISTRY, client)
     if generated:
         for q in build_final_questions(test_movie, generated, METRIC_REGISTRY):

@@ -7,9 +7,29 @@ from openai import OpenAI
 from tavily import TavilyClient
 
 from tier1_bookings import fetch_advance_booking_estimate  # Tier 1
-
-
 logger = logging.getLogger("FanGram.AdvanceBookingSearch")
+
+
+"""
+[Movie Name & Details] ──► Try Tier-1 Parser (`fetch_advance_booking_estimate`)
+                                     │
+                             ┌───────┴───────┐
+                     (Found) │               │ (Miss / None)
+                             ▼               ▼
+                      [Return Result]   [Escalate to Agentic Search]
+                                             │
+                                             ▼
+                                    [LLM generates query]
+                                             │
+                                             ▼ (via Tavily Search Tool)
+                                    [Fetch Live Web Results]
+                                             │
+                                             ▼ (Up to 3 turns)
+                                    [LLM parses & reasons across sources]
+                                             │
+                                             ▼
+                                    [Structured Pydantic Model: AdvanceBookingContext]
+"""
 
 SEARCH_TOOL_SPEC = {
     "type": "function",
@@ -65,22 +85,7 @@ STRICT RULES:
 2. If no real advance booking data exists yet (too early, or a small film with no coverage), set data_found=False rather than guessing.
 3. Limit yourself to 3 search turns maximum.
 """
-# ADVANCE_BOOKING_SYSTEM_PROMPT = """You are an agent researching advance booking activity for an upcoming Indian film release, for a prediction market platform.
 
-# YOUR OBJECTIVE:
-# Find real, current advance ticket booking data for the given movie — ticket counts, gross figures, or explicit trade estimates — using the web_search tool. Do NOT rely on prior knowledge; only use what your searches actually return.
-
-# SEARCH GUIDANCE:
-# - Try queries like '{movie} advance booking tickets sold', '{movie} advance booking day 1 gross', '{movie} box office prediction'.
-# - Multiple outlets (Sacnilk, TrackMyShow, BookMyShow trackers, trade news sites) may report different numbers at different points in the advance window — note this rather than picking one arbitrarily.
-# - If the movie has multiple language versions, capture the breakdown if reported, not just a blended total.
-# - Note explicitly how far into the advance-booking window the data is (e.g. 'Day 1 of a 5-day window') — a same-day early snapshot means much less than a full pre-release total.
-
-# STRICT RULES:
-# 1. Only use information found via web_search. Never estimate purely from memory of the film, cast, or genre.
-# 2. If no real advance booking data exists yet (too early, or a small film with no coverage), set data_found=False rather than guessing.
-# 3. Limit yourself to 3 search turns maximum.
-# """
 
 def _execute_search_tool(tavily_client: TavilyClient, query: str, max_results: int = 3) -> str:
     """Executes a Tavily search, same logic as GroundingEngine's version."""
@@ -143,16 +148,19 @@ def fetch_advance_booking_via_search(
             if call.function.name == "web_search":
                 args = json.loads(call.function.arguments)
                 query = args.get("query", "")
-                result_text = _execute_search_tool(tavily_client, query)  # same helper as grounding.py
+                result_text = _execute_search_tool(tavily_client, query)  
                 messages.append({
-                    "tool_call_id": call.id, "role": "tool",
-                    "name": "web_search", "content": result_text,
+                    "tool_call_id": call.id, 
+                    "role": "tool",
+                    "name": "web_search", 
+                    "content": result_text,
                 })
 
     try:
         final = llm_client.beta.chat.completions.parse(
             model="gpt-5.6-terra",
-            messages=messages + [{"role": "user", "content": "Summarize your findings as AdvanceBookingContext."}],
+            messages=messages + [{"role": "user", 
+                                  "content": "Summarize your findings as AdvanceBookingContext."}],
             response_format=AdvanceBookingContext,
         )
         return final.choices[0].message.parsed
