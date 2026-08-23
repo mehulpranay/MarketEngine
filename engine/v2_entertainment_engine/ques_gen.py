@@ -14,7 +14,8 @@ from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from tavily import TavilyClient
-from retrieving_adv_bking import fetch_advance_booking_estimate
+from tier1_bookings import fetch_advance_booking_estimate
+from tier2_bookings import get_advance_booking_signal, AdvanceBookingContext
 
 logger = logging.getLogger("FanGram.QuestionGeneration")
 
@@ -56,7 +57,7 @@ Do NOT write the question sentence yourself — only provide the threshold, a on
 
 
 """
-from tally_adv_bookings import get_advance_booking_signal, AdvanceBookingContext
+from tier2_bookings import get_advance_booking_signal, AdvanceBookingContext
 
 def normalize_advance_signal(advance) -> dict:
     """Reconciles the two different shapes get_advance_booking_signal can
@@ -128,6 +129,11 @@ def generate_questions_for_movie(
         known_cast=movie.get("primary_cast"),
     )
     advance_info = normalize_advance_signal(raw_advance)
+
+
+    logger.info(f"Anchor for '{movie['movie_name']}': {advance_info['anchor_line']}")
+    if isinstance(raw_advance, AdvanceBookingContext) and raw_advance.sources_used:
+        logger.info(f"Sources used for '{movie['movie_name']}': {raw_advance.sources_used}")
 
     if advance_info["anchor_available"]:
         logger.info(f"Advance booking anchor found for '{movie['movie_name']}' via {advance_info['source_tier']}")

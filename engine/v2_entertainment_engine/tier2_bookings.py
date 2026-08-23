@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from openai import OpenAI
 from tavily import TavilyClient
 
-from retrieving_adv_bking import fetch_advance_booking_estimate  # Tier 1
+from tier1_bookings import fetch_advance_booking_estimate  # Tier 1
 
 
 logger = logging.getLogger("FanGram.AdvanceBookingSearch")
@@ -43,7 +43,6 @@ class AdvanceBookingContext(BaseModel):
     sources_used: List[str] = Field(default_factory=list, description="URLs actually used.")
 
 
-
 ADVANCE_BOOKING_SYSTEM_PROMPT = """You are an agent researching advance booking activity for an upcoming Indian film release, for a prediction market platform.
 
 YOUR OBJECTIVE:
@@ -55,11 +54,33 @@ SEARCH GUIDANCE:
 - If the movie has multiple language versions, capture the breakdown if reported, not just a blended total.
 - Note explicitly how far into the advance-booking window the data is (e.g. 'Day 1 of a 5-day window') — a same-day early snapshot means much less than a full pre-release total.
 
+RECONCILING CONFLICTING SOURCES:
+- When multiple sources report different figures, do not just pick the highest, most recent, or most dramatic number. Reason across all of them.
+- Sacnilk is the most reliable primary source for Indian box office/advance data — when sources conflict, weight Sacnilk-reported figures more heavily than other outlets.
+- Advance booking totals are CUMULATIVE and only grow while the booking window is open. If you find multiple figures from around the same time period, check their timestamps: a larger, LATER figure is not "inconsistent" with an earlier, smaller one — it is very likely simply the same running total measured later. Prefer the most recent complete figure as your baseline, rather than an earlier partial one, even if the numbers differ substantially.
+- When you attribute a claim to a specific outlet in your summary, use the EXACT outlet name as it appears in the source snippet you retrieved. Never guess, assume, or infer which outlet said something.
+
 STRICT RULES:
 1. Only use information found via web_search. Never estimate purely from memory of the film, cast, or genre.
 2. If no real advance booking data exists yet (too early, or a small film with no coverage), set data_found=False rather than guessing.
 3. Limit yourself to 3 search turns maximum.
 """
+# ADVANCE_BOOKING_SYSTEM_PROMPT = """You are an agent researching advance booking activity for an upcoming Indian film release, for a prediction market platform.
+
+# YOUR OBJECTIVE:
+# Find real, current advance ticket booking data for the given movie — ticket counts, gross figures, or explicit trade estimates — using the web_search tool. Do NOT rely on prior knowledge; only use what your searches actually return.
+
+# SEARCH GUIDANCE:
+# - Try queries like '{movie} advance booking tickets sold', '{movie} advance booking day 1 gross', '{movie} box office prediction'.
+# - Multiple outlets (Sacnilk, TrackMyShow, BookMyShow trackers, trade news sites) may report different numbers at different points in the advance window — note this rather than picking one arbitrarily.
+# - If the movie has multiple language versions, capture the breakdown if reported, not just a blended total.
+# - Note explicitly how far into the advance-booking window the data is (e.g. 'Day 1 of a 5-day window') — a same-day early snapshot means much less than a full pre-release total.
+
+# STRICT RULES:
+# 1. Only use information found via web_search. Never estimate purely from memory of the film, cast, or genre.
+# 2. If no real advance booking data exists yet (too early, or a small film with no coverage), set data_found=False rather than guessing.
+# 3. Limit yourself to 3 search turns maximum.
+# """
 
 def _execute_search_tool(tavily_client: TavilyClient, query: str, max_results: int = 3) -> str:
     """Executes a Tavily search, same logic as GroundingEngine's version."""
