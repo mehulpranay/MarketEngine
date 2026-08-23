@@ -6,6 +6,26 @@ the next few days that we haven't already reported, and remembers what's
 already been reported (on disk) so re-runs don't repeat themselves.
 """
 
+""" INFORMATION FLOW (for context):
+[BollywoodHungama Web Page]
+       │
+       ▼ (HTTP GET via requests)
+   [Raw HTML]
+       │
+       ▼ (BeautifulSoup parsing)
+  [Raw Table Rows] ──► [Filter: Vague Dates / Far Future / Past Dates]
+       │
+       ▼
+ [Cleaned Rows]    ──► [Filter: Digital-Only Releases]
+       │
+       ▼
+ [Signature Hash]  ──► [Deduplication Check against 'seen_release_hashes.json']
+       │
+       ▼ (If New)
+  [Final New Movies List] ──► Saved to Disk & Returned to Main Pipeline
+  
+  """
+
 import os
 import re
 import json
@@ -191,3 +211,4 @@ if __name__ == "__main__":
     print(f"Found {len(movies)} new movie(s) releasing within {WINDOW_DAYS} days:\n")
     for m in movies:
         print(m)
+
