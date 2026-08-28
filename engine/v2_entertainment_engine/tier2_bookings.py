@@ -30,6 +30,19 @@ logger = logging.getLogger("FanGram.AdvanceBookingSearch")
                                              ▼
                                     [Structured Pydantic Model: AdvanceBookingContext]
 """
+"""
+{
+  "data_found": true,
+  "summary": "Sacnilk reports 145,000 tickets sold across national chains as of Day 2 of the 5-day advance booking window. Strong traction observed in Hindi multi-plexes with an average ticket price (ATP) of ₹240.",
+  "estimated_day1_india_net_cr": 18.5,
+  "confidence": "high",
+  "sources_used": [
+    "https://www.sacnilk.com/news/toxic_2026_box_office_collection",
+    "https://www.bollywoodhungama.com/news/box-office-special-features/toxic-advance-booking-tracker"
+  ]
+}
+"""
+
 
 SEARCH_TOOL_SPEC = {
     "type": "function",
@@ -69,7 +82,7 @@ YOUR OBJECTIVE:
 Find real, current advance ticket booking data for the given movie — ticket counts, gross figures, or explicit trade estimates — using the web_search tool. Do NOT rely on prior knowledge; only use what your searches actually return.
 
 SEARCH GUIDANCE:
-- Try queries like '{movie} advance booking tickets sold', '{movie} advance booking day 1 gross', '{movie} box office prediction'.
+- Try queries like '{movie} advance booking tickets sold', '{movie} First Day Advance Booking Report ', '{movie} box office prediction for Day 1'.
 - Multiple outlets (Sacnilk, TrackMyShow, BookMyShow trackers, trade news sites) may report different numbers at different points in the advance window — note this rather than picking one arbitrarily.
 - If the movie has multiple language versions, capture the breakdown if reported, not just a blended total.
 - Note explicitly how far into the advance-booking window the data is (e.g. 'Day 1 of a 5-day window') — a same-day early snapshot means much less than a full pre-release total.
@@ -88,18 +101,26 @@ STRICT RULES:
 
 
 def _execute_search_tool(tavily_client: TavilyClient, query: str, max_results: int = 3) -> str:
-    """Executes a Tavily search, same logic as GroundingEngine's version."""
     logger.info(f"Executing search: '{query}'")
     try:
-        response = tavily_client.search(query=query, max_results=max_results, search_depth="basic", topic="news", days=2)
+        response = tavily_client.search(
+            query=query,
+            max_results=max_results,
+            search_depth="advanced",
+            include_raw_content=True,
+        )
         results = response.get("results", [])
         if not results:
             return "No search results found."
-        return "\n".join([f"- {r.get('content', '')}" for r in results])
+
+        entries = []
+        for r in results:
+            text = r.get("raw_content") or r.get("content", "")
+            entries.append(f"- [{r.get('url', 'unknown source')}] {text}")
+        return "\n".join(entries)
     except Exception as e:
         logger.error(f"Tavily search error: {e}")
         return f"Search execution failed: {str(e)}"
-
 
 def fetch_advance_booking_via_search(
     movie_name: str,
@@ -126,7 +147,9 @@ def fetch_advance_booking_via_search(
     ]
 
     max_turns = 3
-    for _ in range(max_turns):
+    for i in range(max_turns):
+        logger.info(f"Advance booking search turn {i+1}/{max_turns} for '{movie_name}'")
+
         try:
             response = llm_client.chat.completions.create(
                 model="gpt-5.6-terra",
@@ -184,6 +207,6 @@ if __name__ == "__main__":
     llm_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
-    result = fetch_advance_booking_via_search("Toxic", "2026-08-25", llm_client, tavily_client)
+    result = fetch_advance_booking_via_search("Toxic", "2026-08-26", llm_client, tavily_client)
     print(result)
 

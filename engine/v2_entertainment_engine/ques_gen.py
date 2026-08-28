@@ -7,6 +7,38 @@ betting_lock_utc / resolution_deadline_utc via date math — no LLM involved
 in either the wording or the timestamps.
 """
 
+"""
+[Enriched Movie Dict (Scripts 1 & 2)] ──► [Advance Booking Signal (Script 4)]
+  - movie_name, language, release_date           - Tier 1: TrackMyShow Ticket Count
+  - genre, primary_cast, movie_slug              - Tier 2: Tavily Search Agent
+                                                        │
+                                                        ▼
+                                         [Normalize Advance Signal (Script 5)]
+                                         - Unifies Tier 1 & Tier 2 shapes
+                                         - Outputs anchor line & estimated Day 1 Cr
+                                                        │
+                                                        ▼
+[Metric Registry (Script 3)] ──► [LLM Calibration Step (generate_questions_for_movie)]
+  - Static templates (`metric_id`,             - Evaluates cast, genre, and advance anchor
+    `question_template`, sources)               - LLM outputs structured Pydantic object
+                                                  (GeneratedQuestionSet) containing:
+                                                  • metric_id
+                                                  • threshold (₹ Cr)
+                                                  • initial_yes_probability
+                                                  • reasoning & display_title
+                                                        │
+                                                        ▼
+                                        [Pure Python Assembly (build_final_questions)]
+                                        - Fills registry templates with LLM thresholds
+                                        - Formats movie name & strips trailing decimals
+                                        - Calculates betting locks (1 day prior, 23:59 IST ──► UTC)
+                                        - Computes resolution deadlines via date math
+                                        - Maps resolution source URLs using movie_slug
+                                                        │
+                                                        ▼
+                                        [Final Actionable Market Questions List]
+"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
@@ -43,15 +75,23 @@ ADVANCE_TICKET_RATIO_LOW, ADVANCE_TICKET_RATIO_HIGH = 0.0995, 0.1409
 
 SYSTEM_PROMPT = """You are calibrating box-office prediction thresholds for an Indian entertainment market platform.
 
-You will be given a movie's name, language, genre, primary cast, and a list of metric_ids with their question templates. For EACH metric_id, output a threshold (in ₹ Cr) that would make an INTERESTING, genuinely uncertain YES/NO question for THIS SPECIFIC movie — not a threshold so low it's obviously YES, or so high it's obviously NO.
+You will be given a movie's name, language, genre, primary cast, and a list of metric_ids with their question templates. For EACH metric_id, output a threshold (in ₹ Cr) that would make an INTERESTING,
+genuinely uncertain YES/NO question for THIS SPECIFIC movie — not a threshold so low it's obviously YES, or so high it's obviously NO.
 
 Use these signals to judge scale:
 - Big-name lead cast (established stars) implies higher realistic thresholds.
 - English-language/Hollywood titles typically post much lower India Net figures than major Hindi star vehicles.
 - Genre alone is a weaker signal than cast — an action/franchise title with an unknown cast should not automatically get a high threshold.
 
-If an ADVANCE BOOKING ANCHOR is provided in the prompt, treat it as your strongest signal — it's a real, grounded estimate of Day 1 India Net revenue for THIS movie, not a guess. Use it to calibrate the day1_threshold directly (set it near, not far below, the anchor's low end — the point is genuine uncertainty, not a guaranteed pass). Then extrapolate opening_weekend, week1, and lifetime thresholds from that Day 1 anchor using typical Bollywood trajectory patterns (weekend is usually 3-4x Day 1 for a strong opener; lifetime typically continues to build over the following weeks for a film with real legs). If no advance booking anchor is provided, fall back to cast/genre/language judgment alone, as described above.
-For EACH metric, also output an initial_yes_probability — your honest estimate of how likely the actual result is to meet or exceed the threshold you chose. This is NOT automatically 0.50 just because you tried to pick an "uncertain" threshold — a well-chosen threshold can still be, say, 65% likely or 40% likely; the point is calibration, not forced neutrality. If an ADVANCE BOOKING ANCHOR is available, use where your threshold sits relative to the anchor's estimated range to inform this: a threshold near the low end of the range implies a HIGHER probability of hitting it; a threshold near the high end implies a LOWER probability. Without an anchor, reason from cast/genre/language as before, but still commit to a genuine number, not a placeholder.
+If an ADVANCE BOOKING ANCHOR is provided in the prompt, treat it as your strongest signal — it's a real, grounded estimate of Day 1 India Net revenue for THIS movie, not a guess. Use it to calibrate
+the day1_threshold directly (set it near, not far below, the anchor's low end — the point is genuine uncertainty, not a guaranteed pass). Then extrapolate opening_weekend, week1, and lifetime thresholds
+from that Day 1 anchor using typical Bollywood trajectory patterns (weekend is usually 3-4x Day 1 for a strong opener; lifetime typically continues to build over the following weeks for a film with real legs).
+If no advance booking anchor is provided, fall back to cast/genre/language judgment alone, as described above.
+
+For EACH metric, also output an initial_yes_probability — your honest estimate of how likely the actual result is to meet or exceed the threshold you chose. This is NOT automatically 0.50 just because you
+tried to pick an "uncertain" threshold — a well-chosen threshold can still be, say, 65% likely or 40% likely; the point is calibration, not forced neutrality. If an ADVANCE BOOKING ANCHOR is available, use 
+where your threshold sits relative to the anchor's estimated range to inform this: a threshold near the low end of the range implies a HIGHER probability of hitting it; a threshold near the high end implies
+a LOWER probability. Without an anchor, reason from cast/genre/language as before, but still commit to a genuine number, not a placeholder.
 
 Do NOT write the question sentence yourself — only provide the threshold, a one-sentence reasoning, probability, and a short display title.
 
@@ -239,3 +279,35 @@ if __name__ == "__main__":
     if generated:
         for q in build_final_questions(test_movie, generated, METRIC_REGISTRY):
             print(q)
+
+
+"""
+[
+  {
+    "movie_name": "Awarapan 2",
+    "metric_id": "day1_threshold",
+    "question_text": "Will 'Awarapan 2' gross over ₹3.5 Cr India Net on Day 1?",
+    "display_title": "Day 1 Box Office Blast",
+    "threshold": 3.5,
+    "initial_yes_probability": 0.65,
+    "reasoning": "Given the strong franchise nostalgia and Emraan Hashmi's pull in romantic-action genres, an opening above 3.5 Cr is achievable.",
+    "betting_lock_utc": "2026-08-13T18:29:00+00:00",
+    "resolution_deadline_utc": "2026-08-15",
+    "resolution_source_url": "https://www.bollywoodhungama.com/movie/awarapan-2/box-office/",
+    "resolution_question_text": "What is the Day 1 Box Office Collection of Awarapan 2?"
+  },
+  {
+    "movie_name": "Awarapan 2",
+    "metric_id": "opening_weekend_threshold",
+    "question_text": "Will 'Awarapan 2' gross over ₹12 Cr India Net in its Opening Weekend?",
+    "display_title": "Opening Weekend Stretch",
+    "threshold": 12.0,
+    "initial_yes_probability": 0.55,
+    "reasoning": "Extrapolating from a ~3.5 Cr Day 1, weekend legs should comfortably push past 12 Cr if word-of-mouth holds.",
+    "betting_lock_utc": "2026-08-13T18:29:00+00:00",
+    "resolution_deadline_utc": "2026-08-17",
+    "resolution_source_url": "https://www.bollywoodhungama.com/movie/awarapan-2/box-office/",
+    "resolution_question_text": "What were the opening weekend collections of Awarapan 2?"
+  }
+]
+"""
